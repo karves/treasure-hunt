@@ -1,5 +1,5 @@
 /**
- * Treasure Hunt Widget v2.0
+ * Treasure Hunt Widget v2.1
  * Embeddable treasure hunt game for employee engagement
  * Built by Mercer Impact Team
  */
@@ -24,7 +24,7 @@
         secondary: '#004E89',
         accent: '#FFD23F'
       },
-      submitEndpoint: '/api/treasure-entries',
+      submitEndpoint: 'https://script.google.com/macros/s/AKfycbyBowx8Tc5-HEKg2TUN_UsUUaHtX24uCYSzxJCdirtDPxR9RBOp6mAxXrng-hTYzpOKPg/exec',
       excludeSelectors: 'nav, header, footer, form, button, a, .no-treasure',
       preferSelectors: 'p, li, figcaption, blockquote',
       storageKey: 'treasureHuntProgress'
@@ -120,24 +120,48 @@
       selectedSpots.forEach(function(spot, index) {
         const id = 'auto-treasure-' + index;
         const treasure = document.createElement('span');
-        treasure.className = 'treasure-hunt-item treasure-hunt-auto treasure-hunt-clickable';
+        treasure.className = 'treasure-hunt-item treasure-hunt-auto treasure-hunt-clickable treasure-hunt-floating';
         treasure.setAttribute('data-treasure-id', id);
         treasure.textContent = self.config.treasureEmoji;
         
-        const textNode = self.getRandomTextNode(spot);
-        if (textNode) {
-          const range = document.createRange();
-          const position = Math.floor(Math.random() * textNode.textContent.length);
-          range.setStart(textNode, position);
-          range.insertNode(treasure);
-          
-          if (self.state.found.indexOf(id) === -1) {
-            treasure.addEventListener('click', function(e) {
-              self.collectTreasure(e, id);
-            });
-          } else {
-            treasure.classList.add('treasure-found');
-          }
+        // Position absolutely near the content block
+        const rect = spot.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+        
+        // Random offset from the element (can be left, right, top, or bottom)
+        const positions = ['left', 'right', 'top', 'bottom'];
+        const position = positions[Math.floor(Math.random() * positions.length)];
+        
+        let top, left;
+        
+        if (position === 'left') {
+          top = rect.top + scrollTop + (rect.height * Math.random());
+          left = rect.left + scrollLeft - 40 - (Math.random() * 20);
+        } else if (position === 'right') {
+          top = rect.top + scrollTop + (rect.height * Math.random());
+          left = rect.right + scrollLeft + 10 + (Math.random() * 20);
+        } else if (position === 'top') {
+          top = rect.top + scrollTop - 40 - (Math.random() * 20);
+          left = rect.left + scrollLeft + (rect.width * Math.random());
+        } else { // bottom
+          top = rect.bottom + scrollTop + 10 + (Math.random() * 20);
+          left = rect.left + scrollLeft + (rect.width * Math.random());
+        }
+        
+        treasure.style.position = 'absolute';
+        treasure.style.top = top + 'px';
+        treasure.style.left = left + 'px';
+        treasure.style.zIndex = '999';
+        
+        document.body.appendChild(treasure);
+        
+        if (self.state.found.indexOf(id) === -1) {
+          treasure.addEventListener('click', function(e) {
+            self.collectTreasure(e, id);
+          });
+        } else {
+          treasure.classList.add('treasure-found');
         }
       });
     },
@@ -394,6 +418,7 @@
       modal.className = 'treasure-modal';
       
       modal.innerHTML = '<div class="treasure-modal-content treasure-modal-enter">' +
+        '<button class="treasure-modal-close">&times;</button>' +
         '<div class="treasure-confetti">🎉</div>' +
         '<h2>Great work!</h2>' +
         '<p>You\'ve found <strong>' + count + ' treasures</strong> and unlocked entry to the prize draw!</p>' +
@@ -403,6 +428,7 @@
         '<button type="submit" class="treasure-btn treasure-btn-primary">Enter draw (' + entries + (entries === 1 ? ' chance' : ' chances') + ')</button>' +
         '</form>' +
         (nextEntries ? '<p class="treasure-continue">Keep hunting for more chances! Find ' + nextCount + ' for ' + nextEntries + ' entries</p>' : '') +
+        '<button class="treasure-btn treasure-btn-secondary">Keep hunting without entering</button>' +
         '</div>';
       
       document.body.appendChild(modal);
@@ -411,6 +437,20 @@
         e.preventDefault();
         const email = e.target.email.value;
         self.submitEntry(email, count, modal);
+      });
+      
+      modal.querySelector('.treasure-btn-secondary').addEventListener('click', function() {
+        modal.classList.add('treasure-modal-exit');
+        setTimeout(function() {
+          modal.remove();
+        }, 300);
+      });
+      
+      modal.querySelector('.treasure-modal-close').addEventListener('click', function() {
+        modal.classList.add('treasure-modal-exit');
+        setTimeout(function() {
+          modal.remove();
+        }, 300);
       });
       
       modal.addEventListener('click', function(e) {
@@ -655,7 +695,7 @@
       const secondary = this.config.brandColors.secondary;
       const accent = this.config.brandColors.accent;
       
-      const styles = '.treasure-hunt-clickable{cursor:pointer;position:relative;display:inline-block;animation:treasure-glow 2s ease-in-out infinite;transition:transform .2s ease;user-select:none}.treasure-hunt-clickable:hover{transform:scale(1.2)}.treasure-collecting{animation:treasure-collect .6s ease-out forwards!important}.treasure-found{opacity:.3;cursor:default;animation:none!important}@keyframes treasure-glow{0%,100%{filter:drop-shadow(0 0 2px ' + accent + ') drop-shadow(0 0 4px ' + accent + ')}50%{filter:drop-shadow(0 0 8px ' + accent + ') drop-shadow(0 0 12px ' + accent + ')}}@keyframes treasure-collect{0%{transform:scale(1);opacity:1}50%{transform:scale(1.5) rotate(180deg)}100%{transform:scale(0) rotate(360deg);opacity:0}}.treasure-particle{position:fixed;font-size:24px;pointer-events:none;z-index:10000;transition:all .8s cubic-bezier(.4,0,.2,1)}.treasure-tracker{position:fixed;bottom:20px;right:20px;background:#fff;padding:16px 20px;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.12);z-index:9999;min-width:180px;transition:transform .3s ease}.treasure-tracker-pulse{animation:tracker-pulse .6s ease}@keyframes tracker-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}.treasure-tracker-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}.treasure-tracker-emoji{font-size:28px}.treasure-tracker-count{font-size:18px;font-weight:700;color:#333}.treasure-tracker-progress{height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden;margin-bottom:8px}.treasure-tracker-bar{height:100%;background:linear-gradient(90deg,' + primary + ',' + accent + ');border-radius:4px;transition:width .5s cubic-bezier(.4,0,.2,1)}.treasure-tracker-entries{text-align:center}.entries-text{font-size:12px;color:#666;font-weight:500}.entries-active{color:' + primary + ';font-weight:700}.treasure-modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px}.treasure-modal-content{background:#fff;padding:40px;border-radius:24px;max-width:500px;width:100%;text-align:center;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.3)}.treasure-modal-enter{animation:modal-enter .3s ease-out}.treasure-modal-exit .treasure-modal-content{animation:modal-exit .3s ease-in}@keyframes modal-enter{from{opacity:0;transform:translateY(30px) scale(.9)}to{opacity:1;transform:translateY(0) scale(1)}}@keyframes modal-exit{from{opacity:1;transform:translateY(0) scale(1)}to{opacity:0;transform:translateY(-30px) scale(.9)}}.treasure-modal-close{position:absolute;top:16px;right:16px;background:0 0;border:none;font-size:32px;cursor:pointer;color:#999;line-height:1;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:all .2s}.treasure-modal-close:hover{background:#f0f0f0;color:#333}.treasure-modal-emoji-big{font-size:64px;margin-bottom:16px}.treasure-confetti{font-size:48px;margin-bottom:16px;animation:confetti-pop .6s ease-out}@keyframes confetti-pop{0%{transform:scale(0) rotate(0)}50%{transform:scale(1.2) rotate(180deg)}100%{transform:scale(1) rotate(360deg)}}.treasure-modal h2{font-size:32px;font-weight:700;color:#222;margin:0 0 16px}.treasure-modal p{font-size:16px;color:#666;margin:0 0 16px;line-height:1.6}.treasure-highlight{font-size:18px;color:' + primary + ';font-weight:600}.treasure-continue{font-size:14px;color:#999;margin-top:16px}.treasure-modal-rewards{display:flex;flex-direction:column;gap:12px;margin:24px 0;padding:20px;background:linear-gradient(135deg,#f8f9fa 0,#e9ecef 100%);border-radius:12px}.reward-item{display:flex;justify-content:space-between;align-items:center;padding:12px;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.05)}.reward-count{font-weight:600;color:#333}.reward-value{font-weight:700;color:' + primary + '}.treasure-hint{font-size:14px;color:#999;font-style:italic;margin-top:8px}.treasure-form{margin:24px 0;display:flex;flex-direction:column;gap:12px}.treasure-form input{padding:14px 16px;font-size:16px;border:2px solid #e0e0e0;border-radius:8px;outline:0;transition:border-color .2s}.treasure-form input:focus{border-color:' + primary + '}.treasure-btn{padding:14px 28px;font-size:16px;font-weight:600;border:none;border-radius:8px;cursor:pointer;transition:all .2s;outline:0}.treasure-btn-primary{background:linear-gradient(135deg,' + primary + ',' + secondary + ');color:#fff}.treasure-btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.2)}.treasure-btn-primary:active{transform:translateY(0)}.treasure-btn:disabled{opacity:.6;cursor:not-allowed;transform:none!important}@media (max-width:768px){.treasure-tracker{bottom:10px;right:10px;padding:12px 16px;min-width:150px}.treasure-modal-content{padding:30px 20px}.treasure-modal h2{font-size:24px}}';
+      const styles = '.treasure-hunt-clickable{cursor:pointer;position:relative;display:inline-block;animation:treasure-glow 2s ease-in-out infinite;transition:transform .2s ease;user-select:none;font-size:32px}.treasure-hunt-floating{position:absolute!important;display:block!important;z-index:999}.treasure-hunt-clickable:hover{transform:scale(1.2)}.treasure-collecting{animation:treasure-collect .6s ease-out forwards!important}.treasure-found{opacity:.3;cursor:default;animation:none!important}@keyframes treasure-glow{0%,100%{filter:drop-shadow(0 0 2px ' + accent + ') drop-shadow(0 0 4px ' + accent + ')}50%{filter:drop-shadow(0 0 8px ' + accent + ') drop-shadow(0 0 12px ' + accent + ')}}@keyframes treasure-collect{0%{transform:scale(1);opacity:1}50%{transform:scale(1.5) rotate(180deg)}100%{transform:scale(0) rotate(360deg);opacity:0}}.treasure-particle{position:fixed;font-size:24px;pointer-events:none;z-index:10000;transition:all .8s cubic-bezier(.4,0,.2,1)}.treasure-tracker{position:fixed;bottom:20px;right:20px;background:#fff;padding:16px 20px;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.12);z-index:9999;min-width:180px;transition:transform .3s ease}.treasure-tracker-pulse{animation:tracker-pulse .6s ease}@keyframes tracker-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}.treasure-tracker-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}.treasure-tracker-emoji{font-size:28px}.treasure-tracker-count{font-size:18px;font-weight:700;color:#333}.treasure-tracker-progress{height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden;margin-bottom:8px}.treasure-tracker-bar{height:100%;background:linear-gradient(90deg,' + primary + ',' + accent + ');border-radius:4px;transition:width .5s cubic-bezier(.4,0,.2,1)}.treasure-tracker-entries{text-align:center}.entries-text{font-size:12px;color:#666;font-weight:500}.entries-active{color:' + primary + ';font-weight:700}.treasure-modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px}.treasure-modal-content{background:#fff;padding:40px;border-radius:24px;max-width:500px;width:100%;text-align:center;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.3)}.treasure-modal-enter{animation:modal-enter .3s ease-out}.treasure-modal-exit .treasure-modal-content{animation:modal-exit .3s ease-in}@keyframes modal-enter{from{opacity:0;transform:translateY(30px) scale(.9)}to{opacity:1;transform:translateY(0) scale(1)}}@keyframes modal-exit{from{opacity:1;transform:translateY(0) scale(1)}to{opacity:0;transform:translateY(-30px) scale(.9)}}.treasure-modal-close{position:absolute;top:16px;right:16px;background:0 0;border:none;font-size:32px;cursor:pointer;color:#999;line-height:1;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:all .2s}.treasure-modal-close:hover{background:#f0f0f0;color:#333}.treasure-modal-emoji-big{font-size:64px;margin-bottom:16px}.treasure-confetti{font-size:48px;margin-bottom:16px;animation:confetti-pop .6s ease-out}@keyframes confetti-pop{0%{transform:scale(0) rotate(0)}50%{transform:scale(1.2) rotate(180deg)}100%{transform:scale(1) rotate(360deg)}}.treasure-modal h2{font-size:32px;font-weight:700;color:#222;margin:0 0 16px}.treasure-modal p{font-size:16px;color:#666;margin:0 0 16px;line-height:1.6}.treasure-highlight{font-size:18px;color:' + primary + ';font-weight:600}.treasure-continue{font-size:14px;color:#999;margin-top:16px}.treasure-modal-rewards{display:flex;flex-direction:column;gap:12px;margin:24px 0;padding:20px;background:linear-gradient(135deg,#f8f9fa 0,#e9ecef 100%);border-radius:12px}.reward-item{display:flex;justify-content:space-between;align-items:center;padding:12px;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.05)}.reward-count{font-weight:600;color:#333}.reward-value{font-weight:700;color:' + primary + '}.treasure-hint{font-size:14px;color:#999;font-style:italic;margin-top:8px}.treasure-form{margin:24px 0;display:flex;flex-direction:column;gap:12px}.treasure-form input{padding:14px 16px;font-size:16px;border:2px solid #e0e0e0;border-radius:8px;outline:0;transition:border-color .2s}.treasure-form input:focus{border-color:' + primary + '}.treasure-btn{padding:14px 28px;font-size:16px;font-weight:600;border:none;border-radius:8px;cursor:pointer;transition:all .2s;outline:0}.treasure-btn-primary{background:linear-gradient(135deg,' + primary + ',' + secondary + ');color:#fff}.treasure-btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.2)}.treasure-btn-primary:active{transform:translateY(0)}.treasure-btn-secondary{background:#fff;color:#666;border:2px solid #e0e0e0;margin-top:8px}.treasure-btn-secondary:hover{background:#f5f5f5;border-color:#ccc}.treasure-btn:disabled{opacity:.6;cursor:not-allowed;transform:none!important}@media (max-width:768px){.treasure-tracker{bottom:10px;right:10px;padding:12px 16px;min-width:150px}.treasure-modal-content{padding:30px 20px}.treasure-modal h2{font-size:24px}}';
       
       const styleSheet = document.createElement('style');
       styleSheet.id = 'treasure-hunt-styles';
