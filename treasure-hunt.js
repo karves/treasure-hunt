@@ -41,23 +41,35 @@
       // Merge user config with defaults
       this.config = { ...this.config, ...userConfig };
       
-      // Load saved progress
-      this.loadProgress();
+      // Wait for DOM to be ready before initializing
+      const startInit = () => {
+        // Load saved progress
+        this.loadProgress();
+        
+        // Initialize based on mode
+        if (this.config.mode === 'auto') {
+          this.autoPlaceTreasures();
+        } else {
+          this.setupManualTreasures();
+        }
+        
+        // Create UI
+        this.createTracker();
+        this.createWelcomeModal();
+        this.injectStyles();
+        
+        // Setup SPA navigation detection
+        this.setupNavigationListener();
+      };
       
-      // Initialize based on mode
-      if (this.config.mode === 'auto') {
-        this.autoPlaceTreasures();
+      // Check if DOM is already loaded
+      if (document.readyState === 'loading') {
+        // DOM is still loading, wait for it
+        document.addEventListener('DOMContentLoaded', startInit);
       } else {
-        this.setupManualTreasures();
+        // DOM is already ready, initialize immediately
+        startInit();
       }
-      
-      // Create UI
-      this.createTracker();
-      this.createWelcomeModal();
-      this.injectStyles();
-      
-      // Setup SPA navigation detection
-      this.setupNavigationListener();
     },
 
     setupManualTreasures() {
