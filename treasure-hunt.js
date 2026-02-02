@@ -1,8 +1,8 @@
 /**
 
-- Treasure Hunt Widget
+- Treasure Hunt Widget v2.0
 - Embeddable treasure hunt game for employee engagement
-- Supports both manual placement and smart auto-placement modes
+- Built by Mercer Impact Team
   */
 
 (function() {
@@ -10,14 +10,14 @@
 
 const TreasureHunt = {
 config: {
-mode: ‘manual’, // ‘manual’ or ‘auto’
+mode: ‘manual’,
 theme: ‘easter-eggs’,
 totalTreasures: 5,
 treasureEmoji: ‘🥚’,
 thresholds: {
-3: 1,  // 3 found = 1 entry
-4: 2,  // 4 found = 2 entries
-5: 5   // 5 found = 5 entries
+3: 1,
+4: 2,
+5: 5
 },
 minThreshold: 3,
 brandColors: {
@@ -36,110 +36,107 @@ state: {
   found: [],
   submitted: false,
   startTime: null,
-  treasurePositions: []
+  isInitialized: false
 },
 
-init(userConfig = {}) {
-  // Merge user config with defaults
-  this.config = { ...this.config, ...userConfig };
+init: function(userConfig) {
+  if (this.state.isInitialized) {
+    console.log('TreasureHunt already initialized');
+    return;
+  }
+
+  this.config = Object.assign({}, this.config, userConfig || {});
   
-  // Wait for DOM to be ready before initializing
-  const startInit = () => {
-    // Load saved progress
-    this.loadProgress();
+  const self = this;
+  
+  function startInit() {
+    self.loadProgress();
     
-    // Initialize based on mode
-    if (this.config.mode === 'auto') {
-      this.autoPlaceTreasures();
+    if (self.config.mode === 'auto') {
+      self.autoPlaceTreasures();
     } else {
-      this.setupManualTreasures();
+      self.setupManualTreasures();
     }
     
-    // Create UI
-    this.createTracker();
-    this.createWelcomeModal();
-    this.injectStyles();
+    self.createTracker();
+    self.createWelcomeModal();
+    self.injectStyles();
+    self.setupNavigationListener();
     
-    // Setup SPA navigation detection
-    this.setupNavigationListener();
-  };
+    self.state.isInitialized = true;
+  }
   
-  // Check if DOM is already loaded
   if (document.readyState === 'loading') {
-    // DOM is still loading, wait for it
     document.addEventListener('DOMContentLoaded', startInit);
   } else {
-    // DOM is already ready, initialize immediately
     startInit();
   }
 },
 
-setupManualTreasures() {
-  // Find all manually placed treasures
+setupManualTreasures: function() {
   const treasures = document.querySelectorAll('[data-treasure], .treasure-hunt-item');
+  const self = this;
   
-  treasures.forEach((treasure, index) => {
-    const id = treasure.getAttribute('data-treasure') || `treasure-${index}`;
+  treasures.forEach(function(treasure, index) {
+    const id = treasure.getAttribute('data-treasure') || 'treasure-' + index;
     treasure.setAttribute('data-treasure-id', id);
     treasure.classList.add('treasure-hunt-clickable');
     
-    // Check if already found
-    if (this.state.found.includes(id)) {
+    if (self.state.found.indexOf(id) > -1) {
       treasure.classList.add('treasure-found');
     } else {
-      treasure.addEventListener('click', (e) => this.collectTreasure(e, id));
+      treasure.addEventListener('click', function(e) {
+        self.collectTreasure(e, id);
+      });
     }
   });
 },
 
-autoPlaceTreasures() {
-  // Remove any existing auto-placed treasures first (prevents duplicates)
+autoPlaceTreasures: function() {
   const existingTreasures = document.querySelectorAll('.treasure-hunt-auto');
-  existingTreasures.forEach(t => t.remove());
+  existingTreasures.forEach(function(t) {
+    t.remove();
+  });
   
-  // Find safe placement spots
   const preferredElements = document.querySelectorAll(this.config.preferSelectors);
   const excludedElements = document.querySelectorAll(this.config.excludeSelectors);
+  const self = this;
   
-  const validSpots = Array.from(preferredElements).filter(el => {
-    // Check if element or any parent is in excluded list
+  const validSpots = Array.from(preferredElements).filter(function(el) {
     let current = el;
     while (current) {
-      if (Array.from(excludedElements).includes(current)) {
+      if (Array.from(excludedElements).indexOf(current) > -1) {
         return false;
       }
       current = current.parentElement;
     }
     
-    // Check if element has enough text content
     const text = el.textContent.trim();
-    return text.length > 20 && el.offsetParent !== null; // visible element
+    return text.length > 20 && el.offsetParent !== null;
   });
 
-  // Limit to available spots or configured total, whichever is lower
   const maxTreasures = Math.min(this.config.totalTreasures, validSpots.length, 10);
-  
-  // Randomly select spots and place treasures
-  const shuffled = validSpots.sort(() => Math.random() - 0.5);
+  const shuffled = validSpots.sort(function() { return Math.random() - 0.5; });
   const selectedSpots = shuffled.slice(0, maxTreasures);
   
-  selectedSpots.forEach((spot, index) => {
-    const id = `auto-treasure-${index}`;
+  selectedSpots.forEach(function(spot, index) {
+    const id = 'auto-treasure-' + index;
     const treasure = document.createElement('span');
     treasure.className = 'treasure-hunt-item treasure-hunt-auto treasure-hunt-clickable';
     treasure.setAttribute('data-treasure-id', id);
-    treasure.textContent = this.config.treasureEmoji;
+    treasure.textContent = self.config.treasureEmoji;
     
-    // Insert at a random position within the element
-    const textNode = this.getRandomTextNode(spot);
+    const textNode = self.getRandomTextNode(spot);
     if (textNode) {
       const range = document.createRange();
       const position = Math.floor(Math.random() * textNode.textContent.length);
       range.setStart(textNode, position);
       range.insertNode(treasure);
       
-      if (!this.state.found.includes(id)) {
-        treasure.addEventListener('click', (e) => this.collectTreasure(e, id));
+      if (self.state.found.indexOf(id) === -1) {
+        treasure.addEventListener('click', function(e) {
+          self.collectTreasure(e, id);
+        });
       } else {
         treasure.classList.add('treasure-found');
       }
@@ -147,12 +144,12 @@ autoPlaceTreasures() {
   });
 },
 
-getRandomTextNode(element) {
+getRandomTextNode: function(element) {
   const walker = document.createTreeWalker(
     element,
     NodeFilter.SHOW_TEXT,
     {
-      acceptNode: (node) => {
+      acceptNode: function(node) {
         return node.textContent.trim().length > 0 ? 
           NodeFilter.FILTER_ACCEPT : 
           NodeFilter.FILTER_REJECT;
@@ -162,7 +159,7 @@ getRandomTextNode(element) {
   
   const textNodes = [];
   let node;
-  while (node = walker.nextNode()) {
+  while ((node = walker.nextNode())) {
     textNodes.push(node);
   }
   
@@ -171,36 +168,28 @@ getRandomTextNode(element) {
     null;
 },
 
-collectTreasure(event, treasureId) {
+collectTreasure: function(event, treasureId) {
   event.preventDefault();
   event.stopPropagation();
   
-  if (this.state.found.includes(treasureId)) return;
+  if (this.state.found.indexOf(treasureId) > -1) return;
   
   const treasure = event.currentTarget;
   this.state.found.push(treasureId);
   treasure.classList.add('treasure-found', 'treasure-collecting');
-  treasure.removeEventListener('click', this.collectTreasure);
   
-  // Celebration animation
   this.createCollectionEffect(treasure);
-  
-  // Update tracker
   this.updateTracker();
-  
-  // Save progress
   this.saveProgress();
-  
-  // Check for threshold milestones
   this.checkMilestone();
   
-  // Remove animation class after animation completes
-  setTimeout(() => {
+  const self = this;
+  setTimeout(function() {
     treasure.classList.remove('treasure-collecting');
   }, 600);
 },
 
-createCollectionEffect(element) {
+createCollectionEffect: function(element) {
   const rect = element.getBoundingClientRect();
   const particle = document.createElement('div');
   particle.className = 'treasure-particle';
@@ -210,105 +199,106 @@ createCollectionEffect(element) {
   
   document.body.appendChild(particle);
   
-  // Animate to tracker
   const tracker = document.querySelector('.treasure-tracker');
   const trackerRect = tracker.getBoundingClientRect();
   
-  setTimeout(() => {
-    particle.style.transform = `translate(${trackerRect.left - rect.left}px, ${trackerRect.top - rect.top}px) scale(0.5)`;
+  setTimeout(function() {
+    particle.style.transform = 'translate(' + (trackerRect.left - rect.left) + 'px, ' + (trackerRect.top - rect.top) + 'px) scale(0.5)';
     particle.style.opacity = '0';
   }, 50);
   
-  setTimeout(() => {
+  setTimeout(function() {
     particle.remove();
   }, 800);
 },
 
-checkMilestone() {
+checkMilestone: function() {
   const count = this.state.found.length;
   const threshold = this.config.minThreshold;
+  const self = this;
   
   if (count === threshold && !this.state.submitted) {
-    // First threshold reached
-    setTimeout(() => this.showSubmissionModal(count), 800);
-  } else if (count > threshold && count in this.config.thresholds) {
-    // Higher threshold reached
-    setTimeout(() => this.showMilestoneModal(count), 800);
+    setTimeout(function() {
+      self.showSubmissionModal(count);
+    }, 800);
+  } else if (count > threshold && this.config.thresholds[count]) {
+    setTimeout(function() {
+      self.showMilestoneModal(count);
+    }, 800);
   } else if (count === this.config.totalTreasures) {
-    // All treasures found!
-    setTimeout(() => this.showCompletionModal(), 800);
+    setTimeout(function() {
+      self.showCompletionModal();
+    }, 800);
   }
 },
 
-createTracker() {
+createTracker: function() {
   const tracker = document.createElement('div');
   tracker.className = 'treasure-tracker';
-  tracker.innerHTML = `
-    <div class="treasure-tracker-header">
-      <span class="treasure-tracker-emoji">${this.config.treasureEmoji}</span>
-      <span class="treasure-tracker-count">0/${this.config.totalTreasures}</span>
-    </div>
-    <div class="treasure-tracker-progress">
-      <div class="treasure-tracker-bar"></div>
-    </div>
-    <div class="treasure-tracker-entries">
-      <span class="entries-text">Find ${this.config.minThreshold} to enter!</span>
-    </div>
-  `;
+  tracker.innerHTML = '<div class="treasure-tracker-header">' +
+    '<span class="treasure-tracker-emoji">' + this.config.treasureEmoji + '</span>' +
+    '<span class="treasure-tracker-count">0/' + this.config.totalTreasures + '</span>' +
+    '</div>' +
+    '<div class="treasure-tracker-progress">' +
+    '<div class="treasure-tracker-bar"></div>' +
+    '</div>' +
+    '<div class="treasure-tracker-entries">' +
+    '<span class="entries-text">Find ' + this.config.minThreshold + ' to enter!</span>' +
+    '</div>';
   
   document.body.appendChild(tracker);
   this.updateTracker();
   
-  // Make tracker tappable on mobile to show status/submit
-  tracker.addEventListener('click', (e) => {
-    // Only if not dragging
-    if (!tracker.classList.contains('tracker-dragging')) {
-      const count = this.state.found.length;
-      if (count >= this.config.minThreshold) {
-        // Show appropriate modal
-        if (count in this.config.thresholds) {
-          this.showMilestoneModal(count);
+  const self = this;
+  let tapTimer = null;
+  
+  tracker.addEventListener('click', function(e) {
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(function() {
+      if (!tracker.classList.contains('tracker-dragging')) {
+        const count = self.state.found.length;
+        if (count >= self.config.minThreshold && self.config.thresholds[count]) {
+          self.showMilestoneModal(count);
         }
       }
-    }
+    }, 200);
   });
   
-  // Make it draggable on mobile
   this.makeTrackerDraggable(tracker);
 },
 
-makeTrackerDraggable(tracker) {
+makeTrackerDraggable: function(tracker) {
   let isDragging = false;
   let hasMoved = false;
   let currentX, currentY, initialX, initialY;
   
-  tracker.addEventListener('touchstart', (e) => {
+  tracker.addEventListener('touchstart', function(e) {
     initialX = e.touches[0].clientX;
     initialY = e.touches[0].clientY;
     isDragging = true;
     hasMoved = false;
   });
   
-  tracker.addEventListener('touchmove', (e) => {
+  tracker.addEventListener('touchmove', function(e) {
     if (isDragging) {
       e.preventDefault();
       hasMoved = true;
       tracker.classList.add('tracker-dragging');
       currentX = e.touches[0].clientX - initialX;
       currentY = e.touches[0].clientY - initialY;
-      tracker.style.transform = `translate(${currentX}px, ${currentY}px)`;
+      tracker.style.transform = 'translate(' + currentX + 'px, ' + currentY + 'px)';
     }
   });
   
-  tracker.addEventListener('touchend', () => {
+  tracker.addEventListener('touchend', function() {
     isDragging = false;
-    setTimeout(() => {
+    setTimeout(function() {
       tracker.classList.remove('tracker-dragging');
-    }, 100);
+    }, 200);
   });
 },
 
-updateTracker() {
+updateTracker: function() {
   const count = this.state.found.length;
   const total = this.config.totalTreasures;
   const percentage = (count / total) * 100;
@@ -317,676 +307,360 @@ updateTracker() {
   const barEl = document.querySelector('.treasure-tracker-bar');
   const entriesEl = document.querySelector('.entries-text');
   
-  countEl.textContent = `${count}/${total}`;
-  barEl.style.width = `${percentage}%`;
+  if (!countEl || !barEl || !entriesEl) return;
   
-  // Update entries text based on thresholds
+  countEl.textContent = count + '/' + total;
+  barEl.style.width = percentage + '%';
+  
   if (count < this.config.minThreshold) {
-    entriesEl.textContent = `Find ${this.config.minThreshold} to enter!`;
-  } else if (count in this.config.thresholds) {
+    entriesEl.textContent = 'Find ' + this.config.minThreshold + ' to enter!';
+    entriesEl.classList.remove('entries-active');
+  } else if (this.config.thresholds[count]) {
     const entries = this.config.thresholds[count];
-    entriesEl.textContent = `${entries} ${entries === 1 ? 'entry' : 'entries'} to win! 🎉`;
+    entriesEl.textContent = entries + (entries === 1 ? ' entry' : ' entries') + ' to win! 🎉';
     entriesEl.classList.add('entries-active');
   }
   
-  // Add pulse animation on update
   const tracker = document.querySelector('.treasure-tracker');
   tracker.classList.add('treasure-tracker-pulse');
-  setTimeout(() => tracker.classList.remove('treasure-tracker-pulse'), 600);
+  setTimeout(function() {
+    tracker.classList.remove('treasure-tracker-pulse');
+  }, 600);
 },
 
-createWelcomeModal() {
-  if (this.state.found.length > 0) return; // Don't show if already started
+createWelcomeModal: function() {
+  if (this.state.found.length > 0) return;
   
   const modal = document.createElement('div');
   modal.className = 'treasure-modal treasure-welcome-modal';
-  modal.innerHTML = `
-    <div class="treasure-modal-content treasure-modal-enter">
-      <button class="treasure-modal-close">&times;</button>
-      <div class="treasure-modal-emoji-big">${this.config.treasureEmoji}</div>
-      <h2>Treasure hunt!</h2>
-      <p>There are <strong>${this.config.totalTreasures} hidden treasures</strong> scattered across this page. Can you find them all?</p>
-      <div class="treasure-modal-rewards">
-        <div class="reward-item">
-          <span class="reward-count">3 treasures</span>
-          <span class="reward-value">1 entry to win</span>
-        </div>
-        <div class="reward-item">
-          <span class="reward-count">4 treasures</span>
-          <span class="reward-value">2 entries to win</span>
-        </div>
-        <div class="reward-item">
-          <span class="reward-count">5 treasures</span>
-          <span class="reward-value">5 entries to win!</span>
-        </div>
-      </div>
-      <p class="treasure-hint">Look for glowing ${this.config.treasureEmoji} icons hidden in the content!</p>
-      <button class="treasure-btn treasure-btn-primary">Start hunting</button>
-    </div>
-  `;
+  const self = this;
+  
+  modal.innerHTML = '<div class="treasure-modal-content treasure-modal-enter">' +
+    '<button class="treasure-modal-close">&times;</button>' +
+    '<div class="treasure-modal-emoji-big">' + this.config.treasureEmoji + '</div>' +
+    '<h2>Treasure hunt!</h2>' +
+    '<p>There are <strong>' + this.config.totalTreasures + ' hidden treasures</strong> scattered across this page. Can you find them all?</p>' +
+    '<div class="treasure-modal-rewards">' +
+    '<div class="reward-item">' +
+    '<span class="reward-count">3 treasures</span>' +
+    '<span class="reward-value">1 entry to win</span>' +
+    '</div>' +
+    '<div class="reward-item">' +
+    '<span class="reward-count">4 treasures</span>' +
+    '<span class="reward-value">2 entries to win</span>' +
+    '</div>' +
+    '<div class="reward-item">' +
+    '<span class="reward-count">5 treasures</span>' +
+    '<span class="reward-value">5 entries to win!</span>' +
+    '</div>' +
+    '</div>' +
+    '<p class="treasure-hint">Look for glowing ' + this.config.treasureEmoji + ' icons hidden in the content!</p>' +
+    '<button class="treasure-btn treasure-btn-primary">Start hunting</button>' +
+    '</div>';
   
   document.body.appendChild(modal);
   
-  // Event listeners
-  modal.querySelector('.treasure-btn-primary').addEventListener('click', () => {
-    this.state.startTime = Date.now();
-    this.saveProgress();
+  modal.querySelector('.treasure-btn-primary').addEventListener('click', function() {
+    self.state.startTime = Date.now();
+    self.saveProgress();
     modal.classList.add('treasure-modal-exit');
-    setTimeout(() => modal.remove(), 300);
+    setTimeout(function() {
+      modal.remove();
+    }, 300);
   });
   
-  modal.querySelector('.treasure-modal-close').addEventListener('click', () => {
+  modal.querySelector('.treasure-modal-close').addEventListener('click', function() {
     modal.classList.add('treasure-modal-exit');
-    setTimeout(() => modal.remove(), 300);
+    setTimeout(function() {
+      modal.remove();
+    }, 300);
   });
   
-  modal.addEventListener('click', (e) => {
+  modal.addEventListener('click', function(e) {
     if (e.target === modal) {
       modal.classList.add('treasure-modal-exit');
-      setTimeout(() => modal.remove(), 300);
+      setTimeout(function() {
+        modal.remove();
+      }, 300);
     }
   });
 },
 
-showSubmissionModal(count) {
+showSubmissionModal: function(count) {
   const entries = this.config.thresholds[count];
+  const nextCount = count + 1;
+  const nextEntries = this.config.thresholds[nextCount];
+  const self = this;
   
   const modal = document.createElement('div');
   modal.className = 'treasure-modal';
-  modal.innerHTML = `
-    <div class="treasure-modal-content treasure-modal-enter">
-      <div class="treasure-confetti">🎉</div>
-      <h2>Great work!</h2>
-      <p>You've found <strong>${count} treasures</strong> and unlocked entry to the prize draw!</p>
-      <p class="treasure-highlight">You have <strong>${entries} ${entries === 1 ? 'entry' : 'entries'}</strong> to win</p>
-      <form class="treasure-form" id="treasureSubmitForm">
-        <input type="email" name="email" placeholder="Enter your email" required />
-        <button type="submit" class="treasure-btn treasure-btn-primary">Enter draw (${entries} ${entries === 1 ? 'chance' : 'chances'})</button>
-      </form>
-      <p class="treasure-continue">Keep hunting for more chances! Find ${count + 1} for ${this.config.thresholds[count + 1] || entries} entries</p>
-    </div>
-  `;
+  
+  modal.innerHTML = '<div class="treasure-modal-content treasure-modal-enter">' +
+    '<div class="treasure-confetti">🎉</div>' +
+    '<h2>Great work!</h2>' +
+    '<p>You\'ve found <strong>' + count + ' treasures</strong> and unlocked entry to the prize draw!</p>' +
+    '<p class="treasure-highlight">You have <strong>' + entries + (entries === 1 ? ' entry' : ' entries') + '</strong> to win</p>' +
+    '<form class="treasure-form" id="treasureSubmitForm">' +
+    '<input type="email" name="email" placeholder="Enter your email" required />' +
+    '<button type="submit" class="treasure-btn treasure-btn-primary">Enter draw (' + entries + (entries === 1 ? ' chance' : ' chances') + ')</button>' +
+    '</form>' +
+    (nextEntries ? '<p class="treasure-continue">Keep hunting for more chances! Find ' + nextCount + ' for ' + nextEntries + ' entries</p>' : '') +
+    '</div>';
   
   document.body.appendChild(modal);
   
-  modal.querySelector('#treasureSubmitForm').addEventListener('submit', (e) => {
+  modal.querySelector('#treasureSubmitForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const email = e.target.email.value;
-    this.submitEntry(email, count, modal);
+    self.submitEntry(email, count, modal);
   });
   
-  modal.addEventListener('click', (e) => {
+  modal.addEventListener('click', function(e) {
     if (e.target === modal) {
       modal.classList.add('treasure-modal-exit');
-      setTimeout(() => modal.remove(), 300);
+      setTimeout(function() {
+        modal.remove();
+      }, 300);
     }
   });
 },
 
-showMilestoneModal(count) {
-  // Always show milestone celebration, whether submitted or not
+showMilestoneModal: function(count) {
   const entries = this.config.thresholds[count];
   const isSubmitted = this.state.submitted;
+  const self = this;
   
   const modal = document.createElement('div');
   modal.className = 'treasure-modal';
   
   if (isSubmitted) {
-    // They already submitted, show upgrade message
-    modal.innerHTML = `
-      <div class="treasure-modal-content treasure-modal-enter">
-        <div class="treasure-confetti">✨</div>
-        <h2>Entry upgraded!</h2>
-        <p>You've found <strong>${count} treasures</strong>!</p>
-        <p class="treasure-highlight">Your entry has been upgraded to <strong>${entries} chances</strong> to win! 🏆</p>
-        ${count < this.config.totalTreasures ? 
-          `<p class="treasure-continue">Keep hunting! ${this.config.totalTreasures - count} more to go</p>` : 
-          `<p class="treasure-continue">You've found them all! Amazing! 🎉</p>`}
-        <button class="treasure-btn treasure-btn-primary">Keep hunting</button>
-      </div>
-    `;
+    const remaining = this.config.totalTreasures - count;
+    modal.innerHTML = '<div class="treasure-modal-content treasure-modal-enter">' +
+      '<div class="treasure-confetti">✨</div>' +
+      '<h2>Entry upgraded!</h2>' +
+      '<p>You\'ve found <strong>' + count + ' treasures</strong>!</p>' +
+      '<p class="treasure-highlight">Your entry has been upgraded to <strong>' + entries + ' chances</strong> to win! 🏆</p>' +
+      (remaining > 0 ? '<p class="treasure-continue">Keep hunting! ' + remaining + ' more to go</p>' : '<p class="treasure-continue">You\'ve found them all! Amazing! 🎉</p>') +
+      '<button class="treasure-btn treasure-btn-primary">Keep hunting</button>' +
+      '</div>';
   } else {
-    // Haven't submitted yet, show submission form
-    modal.innerHTML = `
-      <div class="treasure-modal-content treasure-modal-enter">
-        <div class="treasure-confetti">🎉</div>
-        <h2>Excellent work!</h2>
-        <p>You've found <strong>${count} treasures</strong>!</p>
-        <p class="treasure-highlight">You now have <strong>${entries} ${entries === 1 ? 'entry' : 'entries'}</strong> to win!</p>
-        <form class="treasure-form" id="treasureMilestoneForm">
-          <input type="email" name="email" placeholder="Enter your email" required />
-          <button type="submit" class="treasure-btn treasure-btn-primary">Enter draw (${entries} ${entries === 1 ? 'chance' : 'chances'})</button>
-        </form>
-        ${count < this.config.totalTreasures ? 
-          `<p class="treasure-continue">Or keep hunting for ${count + 1} to get ${this.config.thresholds[count + 1] || entries} entries!</p>` : 
-          ''}
-      </div>
-    `;
+    const nextCount = count + 1;
+    const nextEntries = this.config.thresholds[nextCount];
+    modal.innerHTML = '<div class="treasure-modal-content treasure-modal-enter">' +
+      '<div class="treasure-confetti">🎉</div>' +
+      '<h2>Excellent work!</h2>' +
+      '<p>You\'ve found <strong>' + count + ' treasures</strong>!</p>' +
+      '<p class="treasure-highlight">You now have <strong>' + entries + (entries === 1 ? ' entry' : ' entries') + '</strong> to win!</p>' +
+      '<form class="treasure-form" id="treasureMilestoneForm">' +
+      '<input type="email" name="email" placeholder="Enter your email" required />' +
+      '<button type="submit" class="treasure-btn treasure-btn-primary">Enter draw (' + entries + (entries === 1 ? ' chance' : ' chances') + ')</button>' +
+      '</form>' +
+      (nextEntries ? '<p class="treasure-continue">Or keep hunting for ' + nextCount + ' to get ' + nextEntries + ' entries!</p>' : '') +
+      '</div>';
   }
   
   document.body.appendChild(modal);
   
-  // Setup event listeners
   const closeBtn = modal.querySelector('.treasure-btn-primary');
   if (closeBtn && isSubmitted) {
-    closeBtn.addEventListener('click', () => {
+    closeBtn.addEventListener('click', function() {
       modal.classList.add('treasure-modal-exit');
-      setTimeout(() => modal.remove(), 300);
+      setTimeout(function() {
+        modal.remove();
+      }, 300);
     });
   }
   
   const form = modal.querySelector('#treasureMilestoneForm');
   if (form && !isSubmitted) {
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', function(e) {
       e.preventDefault();
       const email = e.target.email.value;
-      this.submitEntry(email, count, modal);
+      self.submitEntry(email, count, modal);
     });
   }
   
-  modal.addEventListener('click', (e) => {
+  modal.addEventListener('click', function(e) {
     if (e.target === modal) {
       modal.classList.add('treasure-modal-exit');
-      setTimeout(() => modal.remove(), 300);
+      setTimeout(function() {
+        modal.remove();
+      }, 300);
     }
   });
 },
 
-showCompletionModal() {
+showCompletionModal: function() {
   const entries = this.config.thresholds[this.config.totalTreasures];
+  const self = this;
   
   const modal = document.createElement('div');
   modal.className = 'treasure-modal';
-  modal.innerHTML = `
-    <div class="treasure-modal-content treasure-modal-enter">
-      <div class="treasure-confetti">🏆🎉✨</div>
-      <h2>You're a legend!</h2>
-      <p>You found all <strong>${this.config.totalTreasures} treasures</strong>!</p>
-      <p class="treasure-highlight">You have the maximum <strong>${entries} chances</strong> to win! 🎊</p>
-      ${!this.state.submitted ? `
-        <form class="treasure-form" id="treasureCompleteForm">
-          <input type="email" name="email" placeholder="Enter your email" required />
-          <button type="submit" class="treasure-btn treasure-btn-primary">Claim ${entries} entries</button>
-        </form>
-      ` : `
-        <p>Good luck in the draw! 🍀</p>
-      `}
-    </div>
-  `;
+  
+  const formHtml = !this.state.submitted ? 
+    '<form class="treasure-form" id="treasureCompleteForm">' +
+    '<input type="email" name="email" placeholder="Enter your email" required />' +
+    '<button type="submit" class="treasure-btn treasure-btn-primary">Claim ' + entries + ' entries</button>' +
+    '</form>' : 
+    '<p>Good luck in the draw! 🍀</p>';
+  
+  modal.innerHTML = '<div class="treasure-modal-content treasure-modal-enter">' +
+    '<div class="treasure-confetti">🏆🎉✨</div>' +
+    '<h2>You\'re a legend!</h2>' +
+    '<p>You found all <strong>' + this.config.totalTreasures + ' treasures</strong>!</p>' +
+    '<p class="treasure-highlight">You have the maximum <strong>' + entries + ' chances</strong> to win! 🎊</p>' +
+    formHtml +
+    '</div>';
   
   document.body.appendChild(modal);
   
   if (!this.state.submitted) {
-    modal.querySelector('#treasureCompleteForm').addEventListener('submit', (e) => {
+    modal.querySelector('#treasureCompleteForm').addEventListener('submit', function(e) {
       e.preventDefault();
       const email = e.target.email.value;
-      this.submitEntry(email, this.config.totalTreasures, modal);
+      self.submitEntry(email, self.config.totalTreasures, modal);
     });
   }
   
-  modal.addEventListener('click', (e) => {
+  modal.addEventListener('click', function(e) {
     if (e.target === modal) {
       modal.classList.add('treasure-modal-exit');
-      setTimeout(() => modal.remove(), 300);
+      setTimeout(function() {
+        modal.remove();
+      }, 300);
     }
   });
 },
 
-async submitEntry(email, treasuresFound, modal) {
+submitEntry: function(email, treasuresFound, modal) {
   const entries = this.config.thresholds[treasuresFound];
+  const self = this;
   const submitData = {
-    email,
-    treasuresFound,
-    entries,
+    email: email,
+    treasuresFound: treasuresFound,
+    entries: entries,
     totalTreasures: this.config.totalTreasures,
     timeSpent: this.state.startTime ? Math.floor((Date.now() - this.state.startTime) / 1000) : null,
     timestamp: new Date().toISOString(),
     treasureIds: this.state.found
   };
 
-  try {
-    // Show loading state
-    const submitBtn = modal.querySelector('button[type="submit"]');
-    submitBtn.textContent = 'Submitting...';
-    submitBtn.disabled = true;
-    
-    const response = await fetch(this.config.submitEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(submitData)
-    });
-
+  const submitBtn = modal.querySelector('button[type="submit"]');
+  submitBtn.textContent = 'Submitting...';
+  submitBtn.disabled = true;
+  
+  fetch(this.config.submitEndpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(submitData)
+  })
+  .then(function(response) {
     if (response.ok) {
-      this.state.submitted = true;
-      this.saveProgress();
-      
-      // Show success
-      modal.querySelector('.treasure-modal-content').innerHTML = `
-        <div class="treasure-confetti">✅</div>
-        <h2>You're entered!</h2>
-        <p>Thanks for playing! You have <strong>${entries} ${entries === 1 ? 'entry' : 'entries'}</strong> in the prize draw.</p>
-        <p class="treasure-highlight">Good luck! 🍀</p>
-        ${treasuresFound < this.config.totalTreasures ? 
-          `<p class="treasure-continue">Keep hunting to increase your chances!</p>
-          <button class="treasure-btn treasure-btn-primary">Keep hunting</button>` :
-          `<button class="treasure-btn treasure-btn-primary">Close</button>`
-        }
-      `;
-      
-      modal.querySelector('.treasure-btn-primary').addEventListener('click', () => {
-        modal.classList.add('treasure-modal-exit');
-        setTimeout(() => modal.remove(), 300);
-      });
-    } else {
-      throw new Error('Submission failed');
+      return response.json();
     }
-  } catch (error) {
+    throw new Error('Submission failed');
+  })
+  .then(function() {
+    self.state.submitted = true;
+    self.saveProgress();
+    
+    const remaining = self.config.totalTreasures - treasuresFound;
+    const continueHtml = remaining > 0 ? 
+      '<p class="treasure-continue">Keep hunting to increase your chances!</p>' +
+      '<button class="treasure-btn treasure-btn-primary">Keep hunting</button>' :
+      '<button class="treasure-btn treasure-btn-primary">Close</button>';
+    
+    modal.querySelector('.treasure-modal-content').innerHTML = 
+      '<div class="treasure-confetti">✅</div>' +
+      '<h2>You\'re entered!</h2>' +
+      '<p>Thanks for playing! You have <strong>' + entries + (entries === 1 ? ' entry' : ' entries') + '</strong> in the prize draw.</p>' +
+      '<p class="treasure-highlight">Good luck! 🍀</p>' +
+      continueHtml;
+    
+    modal.querySelector('.treasure-btn-primary').addEventListener('click', function() {
+      modal.classList.add('treasure-modal-exit');
+      setTimeout(function() {
+        modal.remove();
+      }, 300);
+    });
+  })
+  .catch(function(error) {
     console.error('Error submitting entry:', error);
     alert('Sorry, there was an error submitting your entry. Please try again.');
-    const submitBtn = modal.querySelector('button[type="submit"]');
-    submitBtn.textContent = `Enter draw (${entries} ${entries === 1 ? 'chance' : 'chances'})`;
+    submitBtn.textContent = 'Enter draw (' + entries + (entries === 1 ? ' chance' : ' chances') + ')';
     submitBtn.disabled = false;
-  }
+  });
 },
 
-setupNavigationListener() {
-  // For SPAs, listen for URL changes and re-scan for treasures
+setupNavigationListener: function() {
   let lastUrl = location.href;
+  const self = this;
   
-  new MutationObserver(() => {
+  new MutationObserver(function() {
     const url = location.href;
     if (url !== lastUrl) {
       lastUrl = url;
-      setTimeout(() => {
-        if (this.config.mode === 'auto') {
-          this.autoPlaceTreasures();
+      setTimeout(function() {
+        if (self.config.mode === 'auto') {
+          self.autoPlaceTreasures();
         } else {
-          this.setupManualTreasures();
+          self.setupManualTreasures();
         }
       }, 500);
     }
   }).observe(document, { subtree: true, childList: true });
   
-  // Also listen for popstate
-  window.addEventListener('popstate', () => {
-    setTimeout(() => {
-      if (this.config.mode === 'auto') {
-        this.autoPlaceTreasures();
+  window.addEventListener('popstate', function() {
+    setTimeout(function() {
+      if (self.config.mode === 'auto') {
+        self.autoPlaceTreasures();
       } else {
-        this.setupManualTreasures();
+        self.setupManualTreasures();
       }
     }, 500);
   });
 },
 
-saveProgress() {
+saveProgress: function() {
   const data = {
     found: this.state.found,
     submitted: this.state.submitted,
     startTime: this.state.startTime
   };
-  localStorage.setItem(this.config.storageKey, JSON.stringify(data));
-},
-
-loadProgress() {
-  const saved = localStorage.getItem(this.config.storageKey);
-  if (saved) {
-    const data = JSON.parse(saved);
-    this.state = { ...this.state, ...data };
+  try {
+    localStorage.setItem(this.config.storageKey, JSON.stringify(data));
+  } catch (e) {
+    console.error('Error saving progress:', e);
   }
 },
 
-injectStyles() {
-  const styles = `
-    .treasure-hunt-clickable {
-      cursor: pointer;
-      position: relative;
-      display: inline-block;
-      animation: treasure-glow 2s ease-in-out infinite;
-      transition: transform 0.2s ease;
-      user-select: none;
+loadProgress: function() {
+  try {
+    const saved = localStorage.getItem(this.config.storageKey);
+    if (saved) {
+      const data = JSON.parse(saved);
+      this.state.found = data.found || [];
+      this.state.submitted = data.submitted || false;
+      this.state.startTime = data.startTime || null;
     }
-    
-    .treasure-hunt-clickable:hover {
-      transform: scale(1.2);
-    }
-    
-    .treasure-collecting {
-      animation: treasure-collect 0.6s ease-out forwards !important;
-    }
-    
-    .treasure-found {
-      opacity: 0.3;
-      cursor: default;
-      animation: none !important;
-    }
-    
-    @keyframes treasure-glow {
-      0%, 100% { 
-        filter: drop-shadow(0 0 2px ${this.config.brandColors.accent}) 
-                drop-shadow(0 0 4px ${this.config.brandColors.accent});
-      }
-      50% { 
-        filter: drop-shadow(0 0 8px ${this.config.brandColors.accent}) 
-                drop-shadow(0 0 12px ${this.config.brandColors.accent});
-      }
-    }
-    
-    @keyframes treasure-collect {
-      0% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.5) rotate(180deg); }
-      100% { transform: scale(0) rotate(360deg); opacity: 0; }
-    }
-    
-    .treasure-particle {
-      position: fixed;
-      font-size: 24px;
-      pointer-events: none;
-      z-index: 10000;
-      transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    
-    .treasure-tracker {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: white;
-      padding: 16px 20px;
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
-      z-index: 9999;
-      min-width: 180px;
-      transition: transform 0.3s ease;
-    }
-    
-    .treasure-tracker-pulse {
-      animation: tracker-pulse 0.6s ease;
-    }
-    
-    @keyframes tracker-pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.05); }
-    }
-    
-    .treasure-tracker-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 8px;
-    }
-    
-    .treasure-tracker-emoji {
-      font-size: 28px;
-    }
-    
-    .treasure-tracker-count {
-      font-size: 18px;
-      font-weight: 700;
-      color: #333;
-    }
-    
-    .treasure-tracker-progress {
-      height: 8px;
-      background: #f0f0f0;
-      border-radius: 4px;
-      overflow: hidden;
-      margin-bottom: 8px;
-    }
-    
-    .treasure-tracker-bar {
-      height: 100%;
-      background: linear-gradient(90deg, ${this.config.brandColors.primary}, ${this.config.brandColors.accent});
-      border-radius: 4px;
-      transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    
-    .treasure-tracker-entries {
-      text-align: center;
-    }
-    
-    .entries-text {
-      font-size: 12px;
-      color: #666;
-      font-weight: 500;
-    }
-    
-    .entries-active {
-      color: ${this.config.brandColors.primary};
-      font-weight: 700;
-    }
-    
-    .treasure-modal {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(8px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10000;
-      padding: 20px;
-    }
-    
-    .treasure-modal-content {
-      background: white;
-      padding: 40px;
-      border-radius: 24px;
-      max-width: 500px;
-      width: 100%;
-      text-align: center;
-      position: relative;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-    }
-    
-    .treasure-modal-enter {
-      animation: modal-enter 0.3s ease-out;
-    }
-    
-    .treasure-modal-exit .treasure-modal-content {
-      animation: modal-exit 0.3s ease-in;
-    }
-    
-    @keyframes modal-enter {
-      from {
-        opacity: 0;
-        transform: translateY(30px) scale(0.9);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-      }
-    }
-    
-    @keyframes modal-exit {
-      from {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-      }
-      to {
-        opacity: 0;
-        transform: translateY(-30px) scale(0.9);
-      }
-    }
-    
-    .treasure-modal-close {
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      background: none;
-      border: none;
-      font-size: 32px;
-      cursor: pointer;
-      color: #999;
-      line-height: 1;
-      width: 32px;
-      height: 32px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 50%;
-      transition: all 0.2s;
-    }
-    
-    .treasure-modal-close:hover {
-      background: #f0f0f0;
-      color: #333;
-    }
-    
-    .treasure-modal-emoji-big {
-      font-size: 64px;
-      margin-bottom: 16px;
-    }
-    
-    .treasure-confetti {
-      font-size: 48px;
-      margin-bottom: 16px;
-      animation: confetti-pop 0.6s ease-out;
-    }
-    
-    @keyframes confetti-pop {
-      0% { transform: scale(0) rotate(0deg); }
-      50% { transform: scale(1.2) rotate(180deg); }
-      100% { transform: scale(1) rotate(360deg); }
-    }
-    
-    .treasure-modal h2 {
-      font-size: 32px;
-      font-weight: 700;
-      color: #222;
-      margin: 0 0 16px 0;
-    }
-    
-    .treasure-modal p {
-      font-size: 16px;
-      color: #666;
-      margin: 0 0 16px 0;
-      line-height: 1.6;
-    }
-    
-    .treasure-highlight {
-      font-size: 18px;
-      color: ${this.config.brandColors.primary};
-      font-weight: 600;
-    }
-    
-    .treasure-continue {
-      font-size: 14px;
-      color: #999;
-      margin-top: 16px;
-    }
-    
-    .treasure-modal-rewards {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin: 24px 0;
-      padding: 20px;
-      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-      border-radius: 12px;
-    }
-    
-    .reward-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    }
-    
-    .reward-count {
-      font-weight: 600;
-      color: #333;
-    }
-    
-    .reward-value {
-      font-weight: 700;
-      color: ${this.config.brandColors.primary};
-    }
-    
-    .treasure-hint {
-      font-size: 14px;
-      color: #999;
-      font-style: italic;
-      margin-top: 8px;
-    }
-    
-    .treasure-form {
-      margin: 24px 0;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    
-    .treasure-form input {
-      padding: 14px 16px;
-      font-size: 16px;
-      border: 2px solid #e0e0e0;
-      border-radius: 8px;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    
-    .treasure-form input:focus {
-      border-color: ${this.config.brandColors.primary};
-    }
-    
-    .treasure-btn {
-      padding: 14px 28px;
-      font-size: 16px;
-      font-weight: 600;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.2s;
-      outline: none;
-    }
-    
-    .treasure-btn-primary {
-      background: linear-gradient(135deg, ${this.config.brandColors.primary}, ${this.config.brandColors.secondary});
-      color: white;
-    }
-    
-    .treasure-btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-    }
-    
-    .treasure-btn-primary:active {
-      transform: translateY(0);
-    }
-    
-    .treasure-btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      transform: none !important;
-    }
-    
-    @media (max-width: 768px) {
-      .treasure-tracker {
-        bottom: 10px;
-        right: 10px;
-        padding: 12px 16px;
-        min-width: 150px;
-      }
-      
-      .treasure-modal-content {
-        padding: 30px 20px;
-      }
-      
-      .treasure-modal h2 {
-        font-size: 24px;
-      }
-    }
-  `;
+  } catch (e) {
+    console.error('Error loading progress:', e);
+  }
+},
+
+injectStyles: function() {
+  if (document.getElementById('treasure-hunt-styles')) return;
+  
+  const primary = this.config.brandColors.primary;
+  const secondary = this.config.brandColors.secondary;
+  const accent = this.config.brandColors.accent;
+  
+  const styles = '.treasure-hunt-clickable{cursor:pointer;position:relative;display:inline-block;animation:treasure-glow 2s ease-in-out infinite;transition:transform .2s ease;user-select:none}.treasure-hunt-clickable:hover{transform:scale(1.2)}.treasure-collecting{animation:treasure-collect .6s ease-out forwards!important}.treasure-found{opacity:.3;cursor:default;animation:none!important}@keyframes treasure-glow{0%,100%{filter:drop-shadow(0 0 2px ' + accent + ') drop-shadow(0 0 4px ' + accent + ')}50%{filter:drop-shadow(0 0 8px ' + accent + ') drop-shadow(0 0 12px ' + accent + ')}}@keyframes treasure-collect{0%{transform:scale(1);opacity:1}50%{transform:scale(1.5) rotate(180deg)}100%{transform:scale(0) rotate(360deg);opacity:0}}.treasure-particle{position:fixed;font-size:24px;pointer-events:none;z-index:10000;transition:all .8s cubic-bezier(.4,0,.2,1)}.treasure-tracker{position:fixed;bottom:20px;right:20px;background:#fff;padding:16px 20px;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.12);z-index:9999;min-width:180px;transition:transform .3s ease}.treasure-tracker-pulse{animation:tracker-pulse .6s ease}@keyframes tracker-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}.treasure-tracker-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}.treasure-tracker-emoji{font-size:28px}.treasure-tracker-count{font-size:18px;font-weight:700;color:#333}.treasure-tracker-progress{height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden;margin-bottom:8px}.treasure-tracker-bar{height:100%;background:linear-gradient(90deg,' + primary + ',' + accent + ');border-radius:4px;transition:width .5s cubic-bezier(.4,0,.2,1)}.treasure-tracker-entries{text-align:center}.entries-text{font-size:12px;color:#666;font-weight:500}.entries-active{color:' + primary + ';font-weight:700}.treasure-modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px}.treasure-modal-content{background:#fff;padding:40px;border-radius:24px;max-width:500px;width:100%;text-align:center;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.3)}.treasure-modal-enter{animation:modal-enter .3s ease-out}.treasure-modal-exit .treasure-modal-content{animation:modal-exit .3s ease-in}@keyframes modal-enter{from{opacity:0;transform:translateY(30px) scale(.9)}to{opacity:1;transform:translateY(0) scale(1)}}@keyframes modal-exit{from{opacity:1;transform:translateY(0) scale(1)}to{opacity:0;transform:translateY(-30px) scale(.9)}}.treasure-modal-close{position:absolute;top:16px;right:16px;background:0 0;border:none;font-size:32px;cursor:pointer;color:#999;line-height:1;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:all .2s}.treasure-modal-close:hover{background:#f0f0f0;color:#333}.treasure-modal-emoji-big{font-size:64px;margin-bottom:16px}.treasure-confetti{font-size:48px;margin-bottom:16px;animation:confetti-pop .6s ease-out}@keyframes confetti-pop{0%{transform:scale(0) rotate(0)}50%{transform:scale(1.2) rotate(180deg)}100%{transform:scale(1) rotate(360deg)}}.treasure-modal h2{font-size:32px;font-weight:700;color:#222;margin:0 0 16px}.treasure-modal p{font-size:16px;color:#666;margin:0 0 16px;line-height:1.6}.treasure-highlight{font-size:18px;color:' + primary + ';font-weight:600}.treasure-continue{font-size:14px;color:#999;margin-top:16px}.treasure-modal-rewards{display:flex;flex-direction:column;gap:12px;margin:24px 0;padding:20px;background:linear-gradient(135deg,#f8f9fa 0,#e9ecef 100%);border-radius:12px}.reward-item{display:flex;justify-content:space-between;align-items:center;padding:12px;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.05)}.reward-count{font-weight:600;color:#333}.reward-value{font-weight:700;color:' + primary + '}.treasure-hint{font-size:14px;color:#999;font-style:italic;margin-top:8px}.treasure-form{margin:24px 0;display:flex;flex-direction:column;gap:12px}.treasure-form input{padding:14px 16px;font-size:16px;border:2px solid #e0e0e0;border-radius:8px;outline:0;transition:border-color .2s}.treasure-form input:focus{border-color:' + primary + '}.treasure-btn{padding:14px 28px;font-size:16px;font-weight:600;border:none;border-radius:8px;cursor:pointer;transition:all .2s;outline:0}.treasure-btn-primary{background:linear-gradient(135deg,' + primary + ',' + secondary + ');color:#fff}.treasure-btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.2)}.treasure-btn-primary:active{transform:translateY(0)}.treasure-btn:disabled{opacity:.6;cursor:not-allowed;transform:none!important}@media (max-width:768px){.treasure-tracker{bottom:10px;right:10px;padding:12px 16px;min-width:150px}.treasure-modal-content{padding:30px 20px}.treasure-modal h2{font-size:24px}}';
   
   const styleSheet = document.createElement('style');
+  styleSheet.id = 'treasure-hunt-styles';
   styleSheet.textContent = styles;
   document.head.appendChild(styleSheet);
 }
@@ -994,6 +668,5 @@ injectStyles() {
 
 };
 
-// Expose globally
 window.TreasureHunt = TreasureHunt;
 })();
